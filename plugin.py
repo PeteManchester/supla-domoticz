@@ -43,39 +43,68 @@ from supla_api import *
 
 def build_domoticz_device(channel, device):
     channel_type = channel["function"]["name"]
+    info("ChannelType: " + str(channel_type));
     channel_name = channel["caption"]
     if not channel_name:
         channel_name = device["name"] + "#" + str(channel["id"])
     unit = len(Devices) + 1
     device_id = str(channel["id"])
+    # Get unit number, if any
+    unitTest = getUnit(device_id)
+    # If it's not in Domoticz already
+    if unitTest != 0:
+	    info("Devices has already been added: " + str(device_id))
+	    return
 
     if channel_type == "POWERSWITCH" or channel_type == "LIGHTSWITCH":
-        debug("Creating switch device '" + channel_name + "'")
+        info("Creating switch device '" + channel_name + "'")
         Domoticz.Device(Name=channel_name,
                         TypeName="Switch",
                         Unit=unit,
                         DeviceID=device_id).Create()
+    
+    if channel_type == "DIMMER":
+        info("Creating Dimmer device '" + channel_name + "'")
+        Domoticz.Device(Name=channel_name, TypeName="Switch", Unit=unit, Type=241, Subtype=3, Switchtype=7, DeviceID=device_id).Create()        
+
 
 
 def update_device(channel, unit):
     channel_type = channel["function"]["name"]
+    info("update_device: " + str(channel))
     if channel_type == "POWERSWITCH" or channel_type == "LIGHTSWITCH":
         if channel["state"]["on"]:
             n_val = 1
-            s_val = "1"
+            s_val = "1"          
         else:
             n_val = 0
             s_val = "0"
-        debug("Changing channel {}/{} to state {}".format(channel["id"], channel_type, s_val))
+        info("Changing channel {}/{} to state {}".format(channel["id"], channel_type, s_val))
         Devices[unit].Update(nValue=n_val, sValue=s_val)
+    if channel_type == "DIMMER":
+        if channel["state"]["on"]:
+            Level = channel["state"]["brightness"]
+            info("Channel Brightness: " + str(Level))
+            UpdateDevice(unit, 1 if Devices[unit].Type == 241 else 2, str(Level), Devices[unit].TimedOut)
+        else:
+            info("Dimmer is OFF")
+            UpdateDevice(unit, 0, 'Off', Devices[unit].TimedOut)
+    
 
+def UpdateDevice(Unit, nValue, sValue, TimedOut):
+    # Make sure that the Domoticz device still exists (they can be deleted) before updating it
+    if (Unit in Devices):
+        if (Devices[Unit].nValue != nValue) or (Devices[Unit].sValue != sValue) or (Devices[Unit].TimedOut != TimedOut):
+            Devices[Unit].Update(nValue=nValue, sValue=str(sValue), TimedOut=TimedOut)
+            Domoticz.Log("Update "+str(nValue)+":'"+str(sValue)+"' ("+Devices[Unit].Name+") TimedOut="+str(TimedOut))
+    return
 
 class BasePlugin:
     enabled = False
 
     def __init__(self):
         self.token = "TOKEN UNKNOWN"
-        self.refresh_time = 30
+        self.refresh_time = 10
         self.last_refresh = datetime.datetime.now()
         self.api_client = None
 
@@ -93,7 +122,9 @@ class BasePlugin:
         self.create_devices()
 
     def create_devices(self):
+        info("Create Devices")
         all_devices = self.api_client.find_all_devices()
+        info("Create Devices: " + str(all_devices))
         for device in all_devices:
             for channel in device["channels"]:
                 build_domoticz_device(channel, device)
@@ -156,15 +187,30 @@ class BasePlugin:
             uint8_t ww;    // Range:0..255, Warm white level (also used as level for monochrome white)
         }
         """
-        debug("onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
+        info("PETE#################### onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
         device = Devices[Unit]
         channel_id = device.DeviceID
         if Command == "On":
             self.api_client.update_channel(channel_id, {"action": "TURN_ON"})
+            channel_after_update = self.api_client.find_channel(channel_id)
+            info("Channel After Update: " + str(channel_after_update))
+            #update_device(channel_after_update, Unit)
+            UpdateDevice(Unit, 1, 'On', Devices[Unit].TimedOut)
         elif Command == "Off":
             self.api_client.update_channel(channel_id, {"action": "TURN_OFF"})
-        channel_after_update = self.api_client.find_channel(channel_id)
-        update_device(channel_after_update, Unit)
+            channel_after_update = self.api_client.find_channel(channel_id)
+            info("Channel After Update: " + str(channel_after_update))
+            #update_device(channel_after_update, Unit)
+            UpdateDevice(Unit, 0, 'Off', Devices[Unit].TimedOut)
+        elif Command == 'Set Level':
+            # Set new level
+            #dev.set_brightness(round(Level*2.55))
+            info("Set Level: " + str(Level))
+            self.api_client.update_channel(channel_id, {"action": "SET_RGBW_PARAMETERS", "brightness": Level })
+            # Update status of Domoticz device
+            UpdateDevice(Unit, 1 if Devices[Unit].Type == 241 else 2, str(Level), Devices[Unit].TimedOut)
+        
+        
 
     def onNotification(self, Name, Subject, Text, Status, Priority, Sound, ImageFile):
         """
@@ -208,6 +254,7 @@ class BasePlugin:
                 device = Devices[unit]
                 channel_id = device.DeviceID
                 channel = self.api_client.find_channel(channel_id)
+                info("Channel Status: " + str(channel))
                 update_device(channel, unit)
 
 
@@ -280,17 +327,25 @@ def error(msg):
 def DumpConfigToLog():
     for x in Parameters:
         if Parameters[x] != "":
-            debug("'" + x + "':'" + str(Parameters[x]) + "'")
-    debug("Device count: " + str(len(Devices)))
+            info("'" + x + "':'" + str(Parameters[x]) + "'")
+    info("Device count: " + str(len(Devices)))
     for x in Devices:
-        debug("Device:           " + str(x) + " - " + str(Devices[x]))
-        debug("Device ID:       '" + str(Devices[x].ID) + "'")
-        debug("Device Name:     '" + Devices[x].Name + "'")
-        debug("Device nValue:    " + str(Devices[x].nValue))
-        debug("Device sValue:   '" + Devices[x].sValue + "'")
-        debug("Device LastLevel: " + str(Devices[x].LastLevel))
+        info("Device:           " + str(x) + " - " + str(Devices[x]))
+        info("Device ID:       '" + str(Devices[x].ID) + "'")
+        info("Device Name:     '" + Devices[x].Name + "'")
+        info("Device nValue:    " + str(Devices[x].nValue))
+        info("Device sValue:   '" + Devices[x].sValue + "'")
+        info("Device LastLevel: " + str(Devices[x].LastLevel))
     return
 
 ########################################################################################################################
 #                                                    DEVICES                                                           #
 ########################################################################################################################
+# Loop thru domoticz devices and see if there's a device with matching DeviceID, if so, return unit number, otherwise return zero
+def getUnit(devid):
+    unit = 0
+    for x in Devices:
+        if Devices[x].DeviceID == devid:
+            unit = x
+            break
+    return unit
