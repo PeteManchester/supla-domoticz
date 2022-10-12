@@ -70,16 +70,10 @@ def build_domoticz_device(channel, device):
 
 def update_devices(self):
     info("Update Devices Start")
-    info("Devices: " + str(Devices.keys()))
     for unit in list(Devices.keys()):   
-        info("Unit: " + str(unit))     
         device = Devices[unit]
-        info("Device: " + str(device))
         channel_id = device.DeviceID
-        info("ChannelId: " + str(channel_id))
         channel =self.api_client.find_channel(channel_id)
-        info("Channel: " + str(channel))
-        info("Channel Status: " + str(channel))
         update_device(channel, unit)
 
 def update_device(channel, unit):
