@@ -29,13 +29,18 @@ SUPLA-CLOUD is a central point joining the executive devices for indirect and di
 <a href="https://cloud.supla.org/account/create">Create an account</a>
 <a href="https://github.com/SUPLA">Get from GITHUB</a>
 
+# This release
+
+This is a custom release based on the original release, it includes support for the V-Pro Smart Wifi Dimmer
+
+
 # How to install
 
 Just go to folder with domoticz plugins, run those commands:
 
 ```bash
 cd domoticz/plugins
-git clone https://github.com/SUPLA/supla-domoticz.git
+git clone https://github.com/PeteManchester/supla-domoticz.git
 cd supla-domoticz
 pip3 install --requirement requirements.txt --target .
 ```
