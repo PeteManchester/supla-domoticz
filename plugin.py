@@ -43,7 +43,7 @@ from supla_api import *
 
 def build_domoticz_device(channel, device):
     channel_type = channel["function"]["name"]
-    info("ChannelType: " + str(channel_type));
+    #info("ChannelType: " + str(channel_type));
     channel_name = channel["caption"]
     if not channel_name:
         channel_name = device["name"] + "#" + str(channel["id"])
@@ -53,23 +53,23 @@ def build_domoticz_device(channel, device):
     unitTest = getUnit(device_id)
     # If it's not in Domoticz already
     if unitTest != 0:
-	    info("Devices has already been added: " + str(device_id))
+	    #info("Devices has already been added: " + str(device_id))
 	    return
 
     if channel_type == "POWERSWITCH" or channel_type == "LIGHTSWITCH":
-        info("Creating switch device '" + channel_name + "'")
+        info("Creating switch device '" + channel_name + "'" + "  " + str(channel))
         Domoticz.Device(Name=channel_name,
                         TypeName="Switch",
                         Unit=unit,
                         DeviceID=device_id).Create()
     
     if channel_type == "DIMMER":
-        info("Creating Dimmer device '" + channel_name + "'")
+        info("Creating Dimmer device '" + channel_name + "'" + "  " + str(channel))
         Domoticz.Device(Name=channel_name, TypeName="Switch", Unit=unit, Type=241, Subtype=3, Switchtype=7, DeviceID=device_id).Create()        
 
 
 def update_devices(self):
-    info("Update Devices Start")
+    #info("Update Devices Start")
     for unit in list(Devices.keys()):   
         device = Devices[unit]
         channel_id = device.DeviceID
@@ -78,7 +78,7 @@ def update_devices(self):
 
 def update_device(channel, unit):
     channel_type = channel["function"]["name"]
-    info("update_device: " + str(channel))
+    #info("update_device: " + str(channel))
     if channel_type == "POWERSWITCH" or channel_type == "LIGHTSWITCH":
         if channel["state"]["on"]:
             n_val = 1
@@ -130,9 +130,9 @@ class BasePlugin:
         self.onHeartbeat(force=True)
 
     def create_devices(self):
-        info("Create Devices")
+        #info("Create Devices")
         all_devices = self.api_client.find_all_devices()
-        info("Create Devices: " + str(all_devices))
+        #info("Create Devices: " + str(all_devices))
         for device in all_devices:
             for channel in device["channels"]:
                 build_domoticz_device(channel, device)
@@ -264,20 +264,20 @@ class BasePlugin:
         #        channel = self.api_client.find_channel(channel_id)
         #        info("Channel Status: " + str(channel))
         #        update_device(channel, unit)
-        info("Devices: " + str(Devices))
+        #info("Devices: " + str(Devices))
         self.updateThread = threading.Thread(name="SUPLAUpdateThread", target=BasePlugin.handleThread, args=(self,))
         self.updateThread.start()
 
     # Separate thread looping ever 10 seconds searching for new SUPLA on network and updating their status
     def handleThread(self):
         try:
-            info("Start of Thread")
+            #info("Update")
             Domoticz.Debug("in handlethread")
             info("Updating devices...")
             #self.last_refresh = now
-            info("Call Create Devices")
+            #info("Call Create Devices")
             self.create_devices()
-            info("Call Update Devices")
+            #info("Call Update Devices")
             update_devices(self)
 
         except Exception as err:
