@@ -31,6 +31,18 @@
     <params>
         <param field="Mode1" label="oAuth Token" required="true"/>
         <param field="Mode2" label="Refresh Time (sec)" required="true" default="30"/>
+        <param field="Mode6" label="Debug" width="150px">
+            <options>
+                <option label="None" value="0"  default="true" />
+                <option label="Python Only" value="2"/>
+                <option label="Basic Debugging" value="62"/>
+                <option label="Basic+Messages" value="126"/>
+                <option label="Queue" value="128"/>
+                <option label="Connections Only" value="16"/>
+                <option label="Connections+Queue" value="144"/>
+                <option label="All" value="-1"/>
+            </options>
+        </param>
     </params>
 </plugin>
 """
@@ -47,7 +59,7 @@ def build_domoticz_device(channel, device):
     channel_name = channel["caption"]
     if not channel_name:
         channel_name = device["name"] + "#" + str(channel["id"])
-    unit = len(Devices) + 1
+    #unit = len(Devices) + 1
     device_id = str(channel["id"])
     # Get unit number, if any
     unitTest = getUnit(device_id)
@@ -55,7 +67,7 @@ def build_domoticz_device(channel, device):
     if unitTest != 0:
 	    #info("Devices has already been added: " + str(device_id))
 	    return
-
+    unit = nextUnit()
     if channel_type == "POWERSWITCH" or channel_type == "LIGHTSWITCH":
         info("Creating switch device '" + channel_name + "'" + "  " + str(channel))
         Domoticz.Device(Name=channel_name,
@@ -64,7 +76,7 @@ def build_domoticz_device(channel, device):
                         DeviceID=device_id).Create()
     
     if channel_type == "DIMMER":
-        info("Creating Dimmer device '" + channel_name + "'" + "  " + str(channel))
+        info("Creating Dimmer device '" + channel_name + "'" + "  " + str(channel) + " Unit: " + str(unit) )
         Domoticz.Device(Name=channel_name, TypeName="Switch", Unit=unit, Type=241, Subtype=3, Switchtype=7, DeviceID=device_id).Create()        
 
 
@@ -119,10 +131,13 @@ class BasePlugin:
         """
         Called when the hardware is started, either after Domoticz start, hardware creation or update
         """
-        debug("onStart called"
+        #Domoticz.Debugging(-1)
+        info("onStart called"
               + " | OAuth Token " + Parameters["Mode1"]
               + " | Refresh Time=" + Parameters["Mode2"])
-        DumpConfigToLog()
+        if Parameters["Mode6"] != "0":
+            Domoticz.Debugging(int(Parameters["Mode6"]))
+            DumpConfigToLog()
         self.token = Parameters["Mode1"]
         self.refresh_time = int(Parameters["Mode2"])
         self.api_client = supla_api.ApiClient(self.token, lambda msg: debug(msg), lambda msg: error(msg))
@@ -268,7 +283,7 @@ class BasePlugin:
         self.updateThread = threading.Thread(name="SUPLAUpdateThread", target=BasePlugin.handleThread, args=(self,))
         self.updateThread.start()
 
-    # Separate thread looping ever 10 seconds searching for new SUPLA on network and updating their status
+    # Separate thread looping every 10 seconds searching for new SUPLA on network and updating their status
     def handleThread(self):
         try:
             #info("Update")
@@ -341,6 +356,7 @@ def info(msg):
 
 def debug(msg):
     Domoticz.Debug(msg)
+    #info(msg)
 
 
 def status(msg):
@@ -375,4 +391,11 @@ def getUnit(devid):
         if Devices[x].DeviceID == devid:
             unit = x
             break
+    return unit
+
+# Find the smallest unit number available to add a device in domoticz
+def nextUnit():
+    unit = 1
+    while unit in Devices and unit < 255:
+        unit = unit + 1
     return unit
